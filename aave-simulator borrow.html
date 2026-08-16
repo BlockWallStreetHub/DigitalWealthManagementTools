@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feed the Machine — Aave Accumulation Simulator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg-deep:#070f1b;
+    --bg:#0c1a2c;
+    --bg-panel:#0f2038;
+    --bg-card:#122544;
+    --line: rgba(234,228,211,0.10);
+    --line-strong: rgba(234,228,211,0.22);
+    --gold:#c9a13b;
+    --gold-bright:#eec957;
+    --rust:#c06a4f;
+    --ink:#ece6d6;
+    --ink-dim:#8fa0b8;
+    --ink-faint:#5c6c84;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    background: radial-gradient(1200px 600px at 10% -10%, rgba(201,161,59,0.07), transparent 60%), var(--bg-deep);
+    color:var(--ink);
+    font-family:'Barlow', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .eyebrow{
+    font-family:'DM Mono', monospace;
+    font-size:0.68rem;
+    letter-spacing:0.2em;
+    text-transform:uppercase;
+    color:var(--gold);
+  }
+  h1,h2,h3{
+    font-family:'Bebas Neue', sans-serif;
+    font-weight:400;
+    letter-spacing:0.02em;
+    margin:0;
+    color:var(--ink);
+  }
+  .page-head{ padding:36px 28px 20px; border-bottom:1px solid var(--line); }
+  .page-head h1{ font-size:clamp(1.9rem,4vw,2.6rem); margin-top:8px; }
+  .page-head p{ color:var(--ink-dim); max-width:640px; margin-top:10px; font-size:0.95rem; }
+
+  .layout{
+    display:grid;
+    grid-template-columns: 320px 1fr;
+    gap:0;
+    align-items:start;
+  }
+  @media (max-width: 860px){
+    .layout{ grid-template-columns:1fr; }
+  }
+
+  .panel{
+    padding:24px 22px 60px;
+    border-right:1px solid var(--line);
+    position:sticky;
+    top:0;
+    max-height:100vh;
+    overflow-y:auto;
+  }
+  @media (max-width: 860px){
+    .panel{ position:static; max-height:none; border-right:none; border-bottom:1px solid var(--line); }
+  }
+  .group{ margin-bottom:26px; }
+  .group-title{
+    font-family:'DM Mono', monospace;
+    font-size:0.66rem;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    margin-bottom:12px;
+    display:block;
+  }
+  .field{ margin-bottom:14px; }
+  .field label{
+    display:flex;
+    justify-content:space-between;
+    font-size:0.82rem;
+    color:var(--ink-dim);
+    margin-bottom:6px;
+  }
+  .field label b{ color:var(--gold-bright); font-weight:500; font-family:'DM Mono', monospace; font-size:0.78rem; }
+  input[type="number"]{
+    width:100%;
+    background:var(--bg-panel);
+    border:1px solid var(--line-strong);
+    color:var(--ink);
+    padding:8px 10px;
+    border-radius:4px;
+    font-family:'DM Mono', monospace;
+    font-size:0.85rem;
+  }
+  input[type="range"]{
+    width:100%;
+    accent-color:var(--gold);
+    height:4px;
+  }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .radio-row{ display:flex; gap:6px; flex-wrap:wrap; }
+  .radio-row label{
+    flex:1;
+    text-align:center;
+    padding:7px 6px;
+    border:1px solid var(--line-strong);
+    border-radius:4px;
+    font-size:0.76rem;
+    color:var(--ink-dim);
+    cursor:pointer;
+    font-family:'DM Mono', monospace;
+  }
+  .radio-row input{ display:none; }
+  .radio-row input:checked + span{ color:var(--bg-deep); }
+  .radio-row label:has(input:checked){
+    background:var(--gold);
+    border-color:var(--gold);
+    color:var(--bg-deep);
+  }
+  .radio-row label:has(input:checked) span{ color:var(--bg-deep); font-weight:600; }
+  .toggle-row{ display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .toggle-row input{ width:16px; height:16px; accent-color:var(--gold); }
+  .toggle-row span{ font-size:0.85rem; color:var(--ink-dim); }
+  .hint{ font-size:0.72rem; color:var(--ink-faint); margin-top:4px; font-family:'DM Mono', monospace; }
+  .divider{ height:1px; background:var(--line); margin:22px 0; }
+
+  .results{ padding:28px 28px 60px; }
+
+  .day-bar{
+    background:var(--bg-panel);
+    border:1px solid var(--line-strong);
+    border-radius:8px;
+    padding:16px 20px;
+    margin-bottom:24px;
+  }
+  .day-bar .top{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; }
+  .day-bar .top .eyebrow{ margin:0; }
+  .day-bar .top .val{ font-family:'Bebas Neue',sans-serif; font-size:1.6rem; color:var(--gold-bright); }
+
+  .cards{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(160px,1fr));
+    gap:12px;
+    margin-bottom:28px;
+  }
+  .card{
+    background:var(--bg-card);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:14px 16px;
+  }
+  .card .label{ font-family:'DM Mono', monospace; font-size:0.65rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-faint); }
+  .card .num{ font-family:'Bebas Neue', sans-serif; font-size:1.7rem; color:var(--ink); margin-top:4px; }
+  .card .sub{ font-family:'DM Mono', monospace; font-size:0.7rem; color:var(--ink-dim); margin-top:2px; }
+  .card.gold .num{ color:var(--gold-bright); }
+  .card.rust .num{ color:var(--rust); }
+
+  .chart-wrap{
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:18px;
+    margin-bottom:28px;
+  }
+  .chart-wrap h3{ font-size:1.1rem; margin-bottom:4px; }
+  .chart-wrap .legend-note{ font-family:'DM Mono', monospace; font-size:0.68rem; color:var(--ink-faint); margin-bottom:14px; }
+  .chart-canvas-box{ height:340px; }
+  .chart-canvas-box svg{ width:100%; height:100%; display:block; }
+  .legend-row{ display:flex; gap:18px; flex-wrap:wrap; margin-bottom:14px; }
+  .legend-item{ display:flex; align-items:center; gap:6px; font-family:'DM Mono', monospace; font-size:0.7rem; color:var(--ink-dim); }
+  .legend-swatch{ width:14px; height:2px; display:inline-block; }
+
+  .table-wrap h3{ font-size:1.1rem; margin-bottom:12px; }
+  .table-scroll{ max-height:360px; overflow-y:auto; border:1px solid var(--line); border-radius:8px; }
+  table{ width:100%; border-collapse:collapse; font-family:'DM Mono', monospace; font-size:0.76rem; }
+  thead th{
+    position:sticky; top:0;
+    background:var(--bg-panel);
+    text-align:right;
+    padding:10px 12px;
+    color:var(--ink-faint);
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    font-size:0.64rem;
+    border-bottom:1px solid var(--line-strong);
+  }
+  thead th:first-child, td:first-child{ text-align:left; }
+  tbody td{ text-align:right; padding:8px 12px; color:var(--ink-dim); border-bottom:1px solid var(--line); }
+  tbody tr.today{ background:rgba(201,161,59,0.09); }
+  tbody tr.today td{ color:var(--gold-bright); }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <span class="eyebrow">Feed the Machine — Simulator</span>
+  <h1>Aave BTC / ETH Accumulation &amp; 30% LTV Borrowing</h1>
+  <p>Model weekly-check deposits into BTC, ETH, and USDC on Aave, compounding supply yield, and what recurring 30% LTV borrowing against the stack looks like — with adjustable price paths so you can test outcomes as the market moves over the year.</p>
+</div>
+
+<div class="layout">
+  <div class="panel">
+
+    <div class="group">
+      <span class="group-title">Income &amp; Deposits</span>
+      <div class="field">
+        <label>Monthly income (reference) <b id="lblIncome">$6,000</b></label>
+        <input type="number" id="inpIncome" value="6000" step="50">
+      </div>
+      <div class="field">
+        <label>Deposit amount / month <b id="lblDepositAmt">$6,000</b></label>
+        <input type="number" id="inpDepositAmt" value="6000" step="50">
+        <div class="hint" id="depositPctHint">100% of monthly income</div>
+      </div>
+      <div class="field">
+        <label>Monthly living need <b id="lblNeed">$3,500</b></label>
+        <input type="number" id="inpNeed" value="3500" step="50">
+      </div>
+      <div class="hint" id="surplusHint">Living need is a reference for how much to borrow below — set the deposit amount above independently.</div>
+      <div class="field" style="margin-top:14px;">
+        <label>Deposit frequency</label>
+        <div class="radio-row" id="freqRow">
+          <label><input type="radio" name="freq" value="daily"><span>Daily</span></label>
+          <label><input type="radio" name="freq" value="weekly" checked><span>Weekly</span></label>
+          <label><input type="radio" name="freq" value="monthly"><span>Monthly</span></label>
+        </div>
+        <div class="hint" id="depositHint"></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="group">
+      <span class="group-title">Outside Capital (Odd Jobs, Business Returns)</span>
+      <div class="toggle-row">
+        <input type="checkbox" id="chkOutside">
+        <span>Add outside capital inflows</span>
+      </div>
+      <div class="field">
+        <label>Day <b id="lblOutsideStart">1</b></label>
+        <input type="range" id="rngOutsideStart" min="1" max="365" value="1">
+      </div>
+      <div class="field">
+        <label>Frequency</label>
+        <div class="radio-row">
+          <label><input type="radio" name="outsideFreq" value="onetime" checked><span>One-time</span></label>
+          <label><input type="radio" name="outsideFreq" value="daily"><span>Daily</span></label>
+          <label><input type="radio" name="outsideFreq" value="weekly"><span>Weekly</span></label>
+          <label><input type="radio" name="outsideFreq" value="monthly"><span>Monthly</span></label>
+        </div>
+      </div>
+      <div class="field">
+        <label>Amount <b id="lblOutsideAmt">$1,000</b></label>
+        <input type="number" id="inpOutsideAmt" value="1000" step="50">
+      </div>
+      <div class="hint">Separate from your regular income deposit — split into BTC/ETH/USDC using the same allocation weights below. "One-time" fires only on the day above; the recurring options start there and repeat.</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="group">
+      <span class="group-title">Allocation</span>
+      <div class="field">
+        <label>BTC <b id="lblWeightBtc">50%</b></label>
+        <input type="range" class="weight-slider" id="rngWeightBtc" min="0" max="100" value="50">
+      </div>
+      <div class="field">
+        <label>ETH <b id="lblWeightEth">50%</b></label>
+        <input type="range" class="weight-slider" id="rngWeightEth" min="0" max="100" value="50">
+      </div>
+      <div class="field">
+        <label>USDC <b id="lblWeightUsdc">0%</b></label>
+        <input type="range" class="weight-slider" id="rngWeightUsdc" min="0" max="100" value="0">
+      </div>
+      <div class="hint">Moving one slider rebalances the other two so the split always totals 100%.</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="group">
+      <span class="group-title">Price Path (Day 1 → Day 365)</span>
+      <div class="field">
+        <label>BTC start</label>
+        <div class="row2">
+          <input type="number" id="inpBtcStart" value="64000" step="500">
+          <input type="number" id="inpBtcEnd" value="90000" step="500">
+        </div>
+        <div class="hint">Left: Day 1 price · Right: Day 365 price</div>
+      </div>
+      <div class="field">
+        <label>ETH start</label>
+        <div class="row2">
+          <input type="number" id="inpEthStart" value="1900" step="50">
+          <input type="number" id="inpEthEnd" value="3200" step="50">
+        </div>
+        <div class="hint">Left: Day 1 price · Right: Day 365 price</div>
+      </div>
+      <div class="hint">USDC is treated as a $1.00 stablecoin — no price path needed.</div>
+      <div class="field" style="margin-top:14px;">
+        <label>Price path shape</label>
+        <div class="radio-row">
+          <label><input type="radio" name="curve" value="linear" checked><span>Linear</span></label>
+          <label><input type="radio" name="curve" value="compound"><span>Compounding</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="group">
+      <span class="group-title">Aave Rates (APY)</span>
+      <div class="field">
+        <label>BTC supply APY <b id="lblBtcApy">0.10%</b></label>
+        <input type="range" id="rngBtcApy" min="0" max="5" step="0.05" value="0.1">
+      </div>
+      <div class="field">
+        <label>ETH supply APY <b id="lblEthApy">1.50%</b></label>
+        <input type="range" id="rngEthApy" min="0" max="6" step="0.05" value="1.5">
+      </div>
+      <div class="field">
+        <label>USDC supply APY <b id="lblUsdcApy">5.00%</b></label>
+        <input type="range" id="rngUsdcApy" min="0" max="15" step="0.1" value="5">
+      </div>
+      <div class="field">
+        <label>Borrow APY (stablecoin) <b id="lblBorrowApy">6.00%</b></label>
+        <input type="range" id="rngBorrowApy" min="0" max="20" step="0.25" value="6">
+      </div>
+      <div class="hint">Defaults reflect roughly where Aave WBTC/ETH supply and stablecoin variable-borrow rates have sat in 2026 — adjust freely, they move daily on-chain.</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="group">
+      <span class="group-title">Borrow Simulation (30% LTV)</span>
+      <div class="toggle-row">
+        <input type="checkbox" id="chkBorrow">
+        <span>Simulate recurring borrowing</span>
+      </div>
+      <div class="field">
+        <label>Start borrowing on day <b id="lblBorrowStart">1</b></label>
+        <input type="range" id="rngBorrowStart" min="1" max="365" value="1">
+      </div>
+      <div class="field">
+        <label>Borrow frequency</label>
+        <div class="radio-row">
+          <label><input type="radio" name="borrowFreq" value="daily"><span>Daily</span></label>
+          <label><input type="radio" name="borrowFreq" value="weekly"><span>Weekly</span></label>
+          <label><input type="radio" name="borrowFreq" value="monthly" checked><span>Monthly</span></label>
+        </div>
+      </div>
+      <div class="field">
+        <label>Borrow amount / period (for living needs) <b id="lblBorrowAmt">$3,500</b></label>
+        <input type="number" id="inpBorrowAmt" value="3500" step="50">
+        <div class="hint" id="maxBorrowHint"></div>
+      </div>
+      <div class="hint">Borrowed funds are treated as withdrawn/spent — they don't get reinvested, but the debt keeps accruing interest against your collateral. Each period, the tool borrows the amount you set, capped by whatever 30% LTV headroom you actually have left.</div>
+    </div>
+
+  </div>
+
+  <div class="results">
+
+    <div class="day-bar">
+      <div class="top">
+        <span class="eyebrow">Viewing Day</span>
+        <span class="val" id="dayVal">Day 365</span>
+      </div>
+      <input type="range" id="rngDay" min="1" max="365" value="365">
+      <div class="radio-row" id="resRow" style="margin-top:12px;">
+        <label><input type="radio" name="res" value="daily"><span>Daily view</span></label>
+        <label><input type="radio" name="res" value="weekly"><span>Weekly view</span></label>
+        <label><input type="radio" name="res" value="monthly" checked><span>Monthly view</span></label>
+      </div>
+    </div>
+
+    <div class="cards" id="cards"></div>
+
+    <div class="chart-wrap">
+      <h3>Position Over Time</h3>
+      <div class="legend-note">Solid = accumulated to date &nbsp;·&nbsp; Faded = projection beyond the viewing day</div>
+      <div class="legend-row">
+        <span class="legend-item"><span class="legend-swatch" style="background:#eec957;"></span>Collateral Value</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:#ece6d6;"></span>Net Position</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:#c9a13b;"></span>Borrow Capacity</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:#c06a4f;"></span>Debt</span>
+      </div>
+      <div class="chart-canvas-box"><svg id="chartSvg" viewBox="0 0 900 320" preserveAspectRatio="none"></svg></div>
+    </div>
+
+    <div class="table-wrap">
+      <h3>Results Table</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Day</th><th>Deposit</th><th>Outside</th><th>Borrowed</th><th>BTC Held</th><th>ETH Held</th><th>USDC Held</th>
+              <th>Collateral Value</th><th>Borrow Cap (30%)</th><th>Debt</th><th>Net Position</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmtUSD = n => '$' + n.toLocaleString('en-US', {maximumFractionDigits:0});
+const fmtUnits = n => n.toLocaleString('en-US', {maximumFractionDigits:6});
+
+function interpolate(start, end, day, curve){
+  const t = (day - 1) / 364;
+  if (curve === 'compound'){
+    if (start <= 0) return start;
+    const ratio = end / start;
+    return start * Math.pow(ratio, t);
+  }
+  return start + (end - start) * t;
+}
+
+let weights = {btc: 50, eth: 50, usdc: 0};
+
+function setWeight(changedKey, newVal){
+  newVal = Math.max(0, Math.min(100, newVal));
+  const keys = ['btc','eth','usdc'];
+  const others = keys.filter(k => k !== changedKey);
+  const remaining = 100 - newVal;
+  const otherSum = weights[others[0]] + weights[others[1]];
+  if (otherSum <= 0.0001){
+    weights[others[0]] = remaining / 2;
+    weights[others[1]] = remaining / 2;
+  } else {
+    weights[others[0]] = remaining * (weights[others[0]] / otherSum);
+    weights[others[1]] = remaining * (weights[others[1]] / otherSum);
+  }
+  weights[changedKey] = newVal;
+
+  $('rngWeightBtc').value = weights.btc;
+  $('rngWeightEth').value = weights.eth;
+  $('rngWeightUsdc').value = weights.usdc;
+  $('lblWeightBtc').textContent = Math.round(weights.btc) + '%';
+  $('lblWeightEth').textContent = Math.round(weights.eth) + '%';
+  $('lblWeightUsdc').textContent = Math.round(weights.usdc) + '%';
+}
+
+function readParams(){
+  const need = parseFloat($('inpNeed').value) || 0;
+  const income = parseFloat($('inpIncome').value) || 0;
+  const depositAmt = parseFloat($('inpDepositAmt').value) || 0;
+  const freq = document.querySelector('input[name="freq"]:checked').value;
+  const btcPct = weights.btc;
+  const ethPct = weights.eth;
+  const usdcPct = weights.usdc;
+  const btcStart = parseFloat($('inpBtcStart').value) || 1;
+  const btcEnd = parseFloat($('inpBtcEnd').value) || 1;
+  const ethStart = parseFloat($('inpEthStart').value) || 1;
+  const ethEnd = parseFloat($('inpEthEnd').value) || 1;
+  const curve = document.querySelector('input[name="curve"]:checked').value;
+  const btcApy = parseFloat($('rngBtcApy').value) / 100;
+  const ethApy = parseFloat($('rngEthApy').value) / 100;
+  const usdcApy = parseFloat($('rngUsdcApy').value) / 100;
+  const borrowApy = parseFloat($('rngBorrowApy').value) / 100;
+  const borrowEnabled = $('chkBorrow').checked;
+  const borrowStart = parseInt($('rngBorrowStart').value);
+  const borrowFreq = document.querySelector('input[name="borrowFreq"]:checked').value;
+  const borrowAmtPerPeriod = parseFloat($('inpBorrowAmt').value) || 0;
+  const outsideEnabled = $('chkOutside').checked;
+  const outsideStart = parseInt($('rngOutsideStart').value);
+  const outsideFreq = document.querySelector('input[name="outsideFreq"]:checked').value;
+  const outsideAmt = parseFloat($('inpOutsideAmt').value) || 0;
+
+  return {need, income, depositAmt, freq, btcPct, ethPct, usdcPct, btcStart, btcEnd, ethStart, ethEnd, curve,
+          btcApy, ethApy, usdcApy, borrowApy, borrowEnabled, borrowStart, borrowFreq, borrowAmtPerPeriod,
+          outsideEnabled, outsideStart, outsideFreq, outsideAmt};
+}
+
+function simulate(p){
+  const monthlyDepositBase = Math.max(p.depositAmt, 0);
+  const dailyDeposit = monthlyDepositBase * 12 / 365;
+  const weeklyDeposit = monthlyDepositBase * 12 / 52;
+  const monthlyDeposit = monthlyDepositBase;
+  const usdcPrice = 1;
+
+  let btcUnits = 0, ethUnits = 0, usdcUnits = 0, debt = 0, totalDeposited = 0, totalOutside = 0, totalBorrowed = 0;
+  const results = [];
+
+  for (let day = 1; day <= 365; day++){
+    const btcPrice = interpolate(p.btcStart, p.btcEnd, day, p.curve);
+    const ethPrice = interpolate(p.ethStart, p.ethEnd, day, p.curve);
+
+    // daily compounding of existing units (aToken-style rebasing)
+    btcUnits *= (1 + p.btcApy/365);
+    ethUnits *= (1 + p.ethApy/365);
+    usdcUnits *= (1 + p.usdcApy/365);
+
+    // deposit trigger — full monthly income deposited, split across BTC/ETH/USDC
+    let depositToday = 0;
+    if (p.freq === 'daily'){
+      depositToday = dailyDeposit;
+    } else if (p.freq === 'weekly'){
+      if (day % 7 === 1) depositToday = weeklyDeposit;
+    } else {
+      if ((day - 1) % 30 === 0) depositToday = monthlyDeposit;
+    }
+
+    // outside capital trigger — separate from income, same allocation weights
+    let outsideToday = 0;
+    if (p.outsideEnabled && day >= p.outsideStart){
+      let isOutsideTrigger = false;
+      if (p.outsideFreq === 'onetime'){
+        isOutsideTrigger = (day === p.outsideStart);
+      } else if (p.outsideFreq === 'daily'){
+        isOutsideTrigger = true;
+      } else if (p.outsideFreq === 'weekly'){
+        isOutsideTrigger = ((day - p.outsideStart) % 7 === 0);
+      } else {
+        isOutsideTrigger = ((day - p.outsideStart) % 30 === 0);
+      }
+      if (isOutsideTrigger) outsideToday = p.outsideAmt;
+    }
+
+    const totalInflow = depositToday + outsideToday;
+    if (totalInflow > 0){
+      totalDeposited += depositToday;
+      totalOutside += outsideToday;
+      const btcPortion = totalInflow * (p.btcPct/100);
+      const ethPortion = totalInflow * (p.ethPct/100);
+      const usdcPortion = totalInflow * (p.usdcPct/100);
+      btcUnits += btcPortion / btcPrice;
+      ethUnits += ethPortion / ethPrice;
+      usdcUnits += usdcPortion / usdcPrice;
+    }
+
+    const collateralValue = btcUnits*btcPrice + ethUnits*ethPrice + usdcUnits*usdcPrice;
+    const borrowCapacity = collateralValue * 0.30;
+
+    // accrue interest on existing debt first
+    if (p.borrowEnabled && debt > 0){
+      debt *= (1 + p.borrowApy/365);
+    }
+
+    // recurring borrow trigger, capped by remaining 30% LTV headroom
+    let borrowedToday = 0;
+    if (p.borrowEnabled && day >= p.borrowStart){
+      let isTrigger = false;
+      if (p.borrowFreq === 'daily'){
+        isTrigger = true;
+      } else if (p.borrowFreq === 'weekly'){
+        isTrigger = ((day - p.borrowStart) % 7 === 0);
+      } else {
+        isTrigger = ((day - p.borrowStart) % 30 === 0);
+      }
+      if (isTrigger){
+        const headroom = Math.max(borrowCapacity - debt, 0);
+        borrowedToday = Math.min(p.borrowAmtPerPeriod, headroom);
+        debt += borrowedToday;
+        totalBorrowed += borrowedToday;
+      }
+    }
+
+    const netPosition = collateralValue - debt;
+
+    results.push({day, depositToday, outsideToday, borrowedToday, btcPrice, ethPrice, usdcPrice, btcUnits, ethUnits, usdcUnits,
+                  totalDeposited, totalOutside, totalBorrowed, collateralValue, borrowCapacity, debt, netPosition});
+  }
+  return results;
+}
+
+function updateLiveLabels(p, results, selectedDay){
+  $('lblNeed').textContent = fmtUSD(p.need);
+  $('lblIncome').textContent = fmtUSD(p.income);
+  $('surplusHint').textContent = `Living need isn't subtracted from deposits — it's a reference for what you're borrowing below.`;
+  $('lblBtcApy').textContent = (p.btcApy*100).toFixed(2) + '%';
+  $('lblEthApy').textContent = (p.ethApy*100).toFixed(2) + '%';
+  $('lblUsdcApy').textContent = (p.usdcApy*100).toFixed(2) + '%';
+  $('lblBorrowApy').textContent = (p.borrowApy*100).toFixed(2) + '%';
+  $('lblBorrowStart').textContent = p.borrowStart;
+  $('lblBorrowAmt').textContent = fmtUSD(p.borrowAmtPerPeriod);
+  $('lblDepositAmt').textContent = fmtUSD(p.depositAmt);
+  $('lblOutsideStart').textContent = p.outsideStart;
+  $('lblOutsideAmt').textContent = fmtUSD(p.outsideAmt);
+  const pctOfIncome = p.income > 0 ? Math.round((p.depositAmt / p.income) * 100) : 0;
+  $('depositPctHint').textContent = `${pctOfIncome}% of monthly income`;
+
+  const weeklyDeposit = p.depositAmt * 12 / 52;
+  const dailyDeposit = p.depositAmt * 12 / 365;
+  if (p.freq === 'daily') $('depositHint').textContent = `Daily deposit: ${fmtUSD(dailyDeposit)}`;
+  else if (p.freq === 'weekly') $('depositHint').textContent = `Weekly deposit: ${fmtUSD(weeklyDeposit)}`;
+  else $('depositHint').textContent = `Monthly deposit: ${fmtUSD(p.depositAmt)} (~every 30 days)`;
+
+  const selRow = results[selectedDay - 1];
+  if (selRow){
+    const headroom = Math.max(selRow.borrowCapacity - selRow.debt, 0);
+    $('maxBorrowHint').textContent = `Borrowed through day ${selectedDay}: ${fmtUSD(selRow.totalBorrowed)} · Headroom left: ${fmtUSD(headroom)}`;
+  }
+}
+
+function renderCards(row){
+  const cards = [
+    {label:'Total Deposited', val: fmtUSD(row.totalDeposited)},
+    {label:'Outside Capital In', val: fmtUSD(row.totalOutside)},
+    {label:'BTC Held', val: fmtUnits(row.btcUnits) + ' BTC', sub: fmtUSD(row.btcUnits*row.btcPrice), cls:''},
+    {label:'ETH Held', val: fmtUnits(row.ethUnits) + ' ETH', sub: fmtUSD(row.ethUnits*row.ethPrice), cls:''},
+    {label:'USDC Held', val: fmtUnits(row.usdcUnits) + ' USDC', sub: fmtUSD(row.usdcUnits*row.usdcPrice), cls:''},
+    {label:'Collateral Value', val: fmtUSD(row.collateralValue), cls:'gold'},
+    {label:'Borrow Cap (30% LTV)', val: fmtUSD(row.borrowCapacity), cls:''},
+    {label:'Total Borrowed', val: fmtUSD(row.totalBorrowed), cls:''},
+    {label:'Debt Outstanding', val: fmtUSD(row.debt), cls: row.debt > 0 ? 'rust' : ''},
+    {label:'Net Position', val: fmtUSD(row.netPosition), cls:'gold'},
+  ];
+  $('cards').innerHTML = cards.map(c => `
+    <div class="card ${c.cls||''}">
+      <div class="label">${c.label}</div>
+      <div class="num">${c.val}</div>
+      ${c.sub ? `<div class="sub">${c.sub}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function getResolutionRows(results, resolution, upToDay){
+  let rows;
+  if (resolution === 'daily'){
+    rows = results.filter(r => r.day <= upToDay);
+  } else if (resolution === 'weekly'){
+    rows = results.filter(r => r.day <= upToDay && (r.day % 7 === 1 || r.day === upToDay));
+  } else {
+    rows = results.filter(r => r.day <= upToDay && ((r.day - 1) % 30 === 0 || r.day === upToDay));
+  }
+  // dedupe by day, keep order
+  const seen = new Set();
+  return rows.filter(r => (seen.has(r.day) ? false : (seen.add(r.day), true)));
+}
+
+function renderTable(results, resolution, selectedDay){
+  const rows = getResolutionRows(results, resolution, selectedDay);
+  $('tbody').innerHTML = rows.map(r => `
+    <tr class="${r.day === selectedDay ? 'today' : ''}">
+      <td>Day ${r.day}</td>
+      <td>${r.depositToday > 0 ? fmtUSD(r.depositToday) : '—'}</td>
+      <td>${r.outsideToday > 0 ? fmtUSD(r.outsideToday) : '—'}</td>
+      <td>${r.borrowedToday > 0 ? fmtUSD(r.borrowedToday) : '—'}</td>
+      <td>${fmtUnits(r.btcUnits)}</td>
+      <td>${fmtUnits(r.ethUnits)}</td>
+      <td>${fmtUnits(r.usdcUnits)}</td>
+      <td>${fmtUSD(r.collateralValue)}</td>
+      <td>${fmtUSD(r.borrowCapacity)}</td>
+      <td>${fmtUSD(r.debt)}</td>
+      <td>${fmtUSD(r.netPosition)}</td>
+    </tr>
+  `).join('');
+}
+
+function fmtAxisUSD(n){
+  const sign = n < 0 ? '-' : '';
+  n = Math.abs(n);
+  if (n >= 1000000) return sign + '$' + (n/1000000).toFixed(1) + 'M';
+  if (n >= 1000) return sign + '$' + Math.round(n/1000) + 'k';
+  return sign + '$' + Math.round(n);
+}
+
+function renderChart(results, selectedDay){
+  const W = 900, H = 320;
+  const margin = {top:16, right:16, bottom:26, left:58};
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+
+  const series = [
+    {key:'collateralValue', color:'#eec957', width:2},
+    {key:'netPosition', color:'#ece6d6', width:2},
+    {key:'borrowCapacity', color:'#c9a13b', width:1, dash:'3,3'},
+    {key:'debt', color:'#c06a4f', width:2},
+  ];
+
+  let allVals = [0];
+  results.forEach(r => series.forEach(s => allVals.push(r[s.key])));
+  let yMin = Math.min(...allVals);
+  let yMax = Math.max(...allVals);
+  if (yMax === yMin) yMax = yMin + 1;
+  const pad = (yMax - yMin) * 0.08;
+  yMin -= pad; yMax += pad;
+
+  const xScale = day => margin.left + ((day-1)/364) * plotW;
+  const yScale = val => margin.top + plotH - ((val - yMin)/(yMax - yMin)) * plotH;
+
+  let gridSvg = '';
+  const gridCount = 4;
+  for (let i=0;i<=gridCount;i++){
+    const val = yMin + (yMax-yMin)*i/gridCount;
+    const y = yScale(val);
+    gridSvg += `<line x1="${margin.left}" y1="${y.toFixed(1)}" x2="${W-margin.right}" y2="${y.toFixed(1)}" stroke="rgba(234,228,211,0.06)" stroke-width="1"/>`;
+    gridSvg += `<text x="${margin.left-8}" y="${(y+3).toFixed(1)}" text-anchor="end" font-family="DM Mono, monospace" font-size="9" fill="#5c6c84">${fmtAxisUSD(val)}</text>`;
+  }
+
+  let xLabelSvg = '';
+  [1, 91, 182, 273, 365].forEach(d => {
+    const x = xScale(d);
+    xLabelSvg += `<text x="${x.toFixed(1)}" y="${H-8}" text-anchor="middle" font-family="DM Mono, monospace" font-size="9" fill="#5c6c84">Day ${d}</text>`;
+  });
+
+  let seriesSvg = '';
+  series.forEach(s => {
+    const before = results.filter(r => r.day <= selectedDay).map(r => `${xScale(r.day).toFixed(1)},${yScale(r[s.key]).toFixed(1)}`).join(' ');
+    const after = results.filter(r => r.day >= selectedDay).map(r => `${xScale(r.day).toFixed(1)},${yScale(r[s.key]).toFixed(1)}`).join(' ');
+    const dashAttr = s.dash ? ` stroke-dasharray="${s.dash}"` : '';
+    if (before) seriesSvg += `<polyline points="${before}" fill="none" stroke="${s.color}" stroke-width="${s.width}"${dashAttr}/>`;
+    if (after) seriesSvg += `<polyline points="${after}" fill="none" stroke="${s.color}" stroke-width="${s.width}" stroke-dasharray="${s.dash ? s.dash : '4,4'}" opacity="0.35"/>`;
+  });
+
+  const selX = xScale(selectedDay).toFixed(1);
+  const marker = `<line x1="${selX}" y1="${margin.top}" x2="${selX}" y2="${H-margin.bottom}" stroke="#c9a13b" stroke-width="1" stroke-dasharray="2,3" opacity="0.6"/>`;
+
+  $('chartSvg').setAttribute('viewBox', `0 0 ${W} ${H}`);
+  $('chartSvg').innerHTML = gridSvg + marker + seriesSvg + xLabelSvg;
+}
+
+function recompute(){
+  const p = readParams();
+  const results = simulate(p);
+  const selectedDay = parseInt($('rngDay').value);
+  const resolution = document.querySelector('input[name="res"]:checked').value;
+
+  $('dayVal').textContent = 'Day ' + selectedDay;
+  updateLiveLabels(p, results, selectedDay);
+  renderCards(results[selectedDay - 1]);
+  renderChart(results, selectedDay);
+  renderTable(results, resolution, selectedDay);
+}
+
+document.querySelectorAll('input:not(.weight-slider)').forEach(el => el.addEventListener('input', recompute));
+['btc','eth','usdc'].forEach(key => {
+  const idMap = {btc:'rngWeightBtc', eth:'rngWeightEth', usdc:'rngWeightUsdc'};
+  $(idMap[key]).addEventListener('input', (e) => {
+    setWeight(key, parseFloat(e.target.value));
+    recompute();
+  });
+});
+setWeight('btc', weights.btc); // sync initial labels
+recompute();
+</script>
+</body>
+</html>
